@@ -49,12 +49,11 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
       const ordersResult = await request.get('https://api.x.immutable.com/v1/orders', { params: data.searchParams });
       process.stdout.write('.');
       const orders = ordersResult?.data?.result || [];
-      if (orders.length > 0) {
-        const filteredOrders = orders.filter(
-          ({ order_id: id }: { order_id: number }) => !currentOrderIds.includes(id)
-        );
-
-        const order = filteredOrders[Math.floor(Math.random() * orders.length)];
+      const filteredOrders = orders.filter(
+        ({ order_id: id }: { order_id: number }) => !currentOrderIds.includes(id)
+      );
+      if (filteredOrders.length > 0) {
+        const order = filteredOrders[Math.floor(Math.random() * filteredOrders.length)];
         currentOrderIds.push(order.order_id);
 
         process.stdout.write(` [name=${order.sell.data.properties.name} tokenId=${order.sell.data.token_id}] `);
