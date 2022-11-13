@@ -33,6 +33,8 @@ channelWrapper.on('error', (err) => {
 });
 
 let isCancelled = false;
+let currentOrderIds: number[] = [];
+
 await channelWrapper.consume('buy-cancel', async (msg: amqplib.ConsumeMessage) => {
   isCancelled = true;
   await channelWrapper.ack(msg);
@@ -47,7 +49,13 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
       process.stdout.write('.');
       const orders = ordersResult?.data?.result || [];
       if (orders.length > 0) {
-        const order = orders[Math.floor(Math.random() * orders.length)];
+        const filteredOrders = orders.filter(
+          ({ order_id: id }: { order_id: number }) => !currentOrderIds.includes(id)
+        );
+
+        const order = filteredOrders[Math.floor(Math.random() * orders.length)];
+        currentOrderIds.push(order.order_id);
+
         process.stdout.write(` [name=${order.sell.data.properties.name} tokenId=${order.sell.data.token_id}] `);
 
         const signableResult = await request.post('https://api.x.immutable.com/v3/signable-trade-details', {
