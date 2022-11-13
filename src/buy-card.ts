@@ -59,7 +59,7 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
 
         process.stdout.write(` [name=${order.sell.data.properties.name} tokenId=${order.sell.data.token_id}] `);
 
-        const signableResult = await request.post('https://api.x.immutable.com/v3/signable-trade-details', {
+        const signableResult = await axios.post('https://api.x.immutable.com/v3/signable-trade-details', {
           "order_id": order.order_id,
           "user": (await ethSigner.getAddress()).toLowerCase()
         }, {});
@@ -78,7 +78,7 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
 
         if (Number(createTradeRequest.amount_sell) + Number(createTradeRequest.fee_info.fee_limit) < data.priceLimit) {
           if (TRADING === 'ON') {
-            const tradeResult = await request.post('https://api.x.immutable.com/v1/trades', createTradeRequest, {
+            const tradeResult = await axios.post('https://api.x.immutable.com/v1/trades', createTradeRequest, {
               headers: {
                 'x-imx-eth-address': (await ethSigner.getAddress()).toLowerCase(),
                 'x-imx-eth-signature': ethSignature,
