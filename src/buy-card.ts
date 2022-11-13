@@ -48,7 +48,7 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
       const orders = ordersResult?.data?.result || [];
       if (orders.length > 0) {
         const order = orders[Math.floor(Math.random() * orders.length)];
-        process.stdout.write(` [orderId=${order.order_id}] `);
+        process.stdout.write(` [name=${order.sell.data.properties.name} tokenId=${order.sell.data.token_id}] `);
 
         const signableResult = await request.post('https://api.x.immutable.com/v3/signable-trade-details', {
           "order_id": order.order_id,
@@ -64,7 +64,7 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
         const ethSignature = await ethSigner.signMessage(signableMessage);
         const starkSignature = await starkSigner.signMessage(payloadHash);
 
-        createTradeRequest.order_id = data.orderId;
+        createTradeRequest.order_id = order.order_id;
         createTradeRequest.stark_signature = starkSignature;
 
         if (Number(createTradeRequest.amount_sell) + Number(createTradeRequest.fee_info.fee_limit) < data.priceLimit) {
