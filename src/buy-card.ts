@@ -17,7 +17,6 @@ connection.on('connect', () => {
 });
 connection.on('disconnect', () => {
   process.stdout.write(` [Rabbit-client disconnected] `);
-  process.exit(0);
 });
 
 const channelWrapper = connection.createChannel({
