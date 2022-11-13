@@ -3,7 +3,7 @@ import type amqplib from 'amqplib';
 import axios from 'axios';
 import rateLimit from 'axios-rate-limit';
 import { ethSigner, starkSigner } from './signers';
-import { RABBIT_URL, TRADING, MAX_REQUESTS, REQUESTS_DURATION_MS } from './config';
+import { RABBIT_URL, TRADING, MAX_REQUESTS, REQUESTS_DURATION_MS, RABBIT_PREFETCH } from './config';
 
 const request = rateLimit(axios.create(), { maxRequests: MAX_REQUESTS, perMilliseconds: REQUESTS_DURATION_MS });
 const connection = amqp.connect([RABBIT_URL]);
@@ -23,6 +23,7 @@ connection.on('disconnect', () => {
 const channelWrapper = connection.createChannel({
   json: true,
   setup: async (channel: Channel) => {
+    await channel.prefetch(RABBIT_PREFETCH);
     await channel.assertQueue('buy-card', { durable: true });
     await channel.assertQueue('buy-cancel', { durable: true });
   },
