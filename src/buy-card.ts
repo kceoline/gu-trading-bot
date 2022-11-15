@@ -8,6 +8,10 @@ import { RABBIT_URL, TRADING, MAX_REQUESTS, REQUESTS_DURATION_MS, RABBIT_PREFETC
 const request = rateLimit(axios.create(), { maxRequests: MAX_REQUESTS, perMilliseconds: REQUESTS_DURATION_MS });
 const connection = amqp.connect([RABBIT_URL]);
 
+let isStopped = false;
+let isCancelled = false;
+let currentOrderIds: number[] = [];
+
 connection.on('connectFailed', () => {
   process.stdout.write(` [Rabbit-client connection failed] `);
   process.exit(0);
@@ -16,6 +20,10 @@ connection.on('connect', () => {
   process.stdout.write(` [Rabbit-client connected successfully] `);
 });
 connection.on('disconnect', () => {
+  isStopped = true;
+  setTimeout(async () => {
+    isStopped = false;
+  }, 10000);
   process.stdout.write(` [Rabbit-client disconnected] `);
 });
 
@@ -23,30 +31,45 @@ const channelWrapper = connection.createChannel({
   json: true,
   setup: async (channel: Channel) => {
     await channel.prefetch(RABBIT_PREFETCH);
-    await channel.assertQueue('buy-card', { durable: true });
-    await channel.assertQueue('buy-cancel', { durable: true });
+    return channel.assertQueue('buy-card', { durable: true });
   },
 });
+
+const channelCancel = connection.createChannel({
+  json: true,
+  setup: async (channel: Channel) => {
+    await channel.prefetch(1);
+    return channel.assertQueue('buy-cancel', { durable: true });
+  },
+});
+
 channelWrapper.on('error', (err) => {
   process.stdout.write(` Rabbit-client channel error: ${err?.message} `);
   process.exit(0);
 });
 
-let isCancelled = false;
-let currentOrderIds: number[] = [];
+channelCancel.on('error', (err) => {
+  process.stdout.write(` Rabbit-client channel error: ${err?.message} `);
+  process.exit(0);
+});
 
-await channelWrapper.consume('buy-cancel', async (msg: amqplib.ConsumeMessage) => {
+await channelCancel.consume('buy-cancel', async (msg: amqplib.ConsumeMessage) => {
   isCancelled = true;
-  await channelWrapper.ack(msg);
+  setTimeout(async () => {
+    await channelWrapper.ack(msg);
+    isCancelled = false;
+  }, 10000);
 });
 
 await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => {
   try {
     const data = JSON.parse(msg.content.toString());
     let isBought = false;
-    while (!isBought && !isCancelled) {
+    for (let i = 0; !isBought && !isStopped && !isCancelled && i < 100; i++) {
       const ordersResult = await request.get('https://api.x.immutable.com/v1/orders', { params: data.searchParams });
-      process.stdout.write('.');
+      if (i % 20 === 0) {
+        process.stdout.write('.');
+      }
       const orders = ordersResult?.data?.result || [];
       const filteredOrders = orders.filter(
         ({ order_id: id }: { order_id: number }) => !currentOrderIds.includes(id)
@@ -101,6 +124,7 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
 
   if (isCancelled) {
     await channelWrapper.ack(msg);
+  } else {
+    await channelWrapper.nack(msg);
   }
-  isCancelled = false;
 });
