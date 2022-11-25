@@ -14,7 +14,6 @@ let currentOrderIds: number[] = [];
 
 connection.on('connectFailed', () => {
   process.stdout.write(` [Rabbit-client connection failed] `);
-  process.exit(0);
 });
 connection.on('connect', () => {
   process.stdout.write(` [Rabbit-client connected successfully] `);
@@ -56,15 +55,16 @@ channelCancel.on('error', (err) => {
 await channelCancel.consume('buy-cancel', async (msg: amqplib.ConsumeMessage) => {
   isCancelled = true;
   setTimeout(async () => {
-    await channelWrapper.ack(msg);
+    await channelCancel.ack(msg);
     isCancelled = false;
   }, 10000);
 });
 
 await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => {
+  let isBought = false;
+
   try {
     const data = JSON.parse(msg.content.toString());
-    let isBought = false;
     for (let i = 0; !isBought && !isStopped && !isCancelled && i < 100; i++) {
       const ordersResult = await request.get('https://api.x.immutable.com/v1/orders', { params: data.searchParams });
       if (i % 20 === 0) {
@@ -114,7 +114,6 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
           }
 
           isBought = true;
-          await channelWrapper.ack(msg);
         }
       }
     }
@@ -122,7 +121,7 @@ await channelWrapper.consume('buy-card', async (msg: amqplib.ConsumeMessage) => 
     process.stdout.write(` [${err?.message} ${JSON.stringify(err?.response?.data)}] `);
   }
 
-  if (isCancelled) {
+  if (isCancelled || isBought) {
     await channelWrapper.ack(msg);
   } else {
     await channelWrapper.nack(msg);
